@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Q&A</title>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+<style>
+body{font-family:Segoe UI,Arial;background:#f6f8fb;color:#333}
+.container{max-width:900px;margin:30px auto;padding:20px}
+.card{background:#fff;border-radius:12px;padding:24px}
+.form-control{width:100%;padding:10px;margin-bottom:12px;border-radius:8px;border:1px solid #e1e5e9}
+.btn{background:#00f2fe;color:#fff;padding:10px 16px;border-radius:8px;border:none;cursor:pointer}
+.status{margin-top:12px;padding:10px;border-radius:8px}
+.status.info{background:#d1ecf1;color:#0c5460}
+.status.success{background:#d4edda;color:#155724}
+.status.error{background:#f8d7da;color:#721c24}
+.answer-box{background:#f8f9fa;padding:12px;border-radius:8px}
+.chunk-item{background:#fff;padding:8px;border-radius:6px;margin-bottom:8px}
+</style>
+</head>
+<body>
+<div class="container">
+<div class="card">
+<h2><i class="fas fa-question-circle"></i> Question & Answer</h2>
+<label for="question">Ask a question about the transcribed content:</label>
+<div style="display:flex;gap:8px"><input id="question" class="form-control"><button id="ask-btn" class="btn">Ask</button></div>
+<div id="qa-status"></div>
+<div id="answer-box" style="display:none;margin-top:12px" class="answer-box">
+<h4>Answer</h4>
+<div id="answer-text"></div>
+<h5 style="margin-top:12px">Relevant Chunks</h5>
+<div id="chunks-list"></div>
+</div>
+<div style="margin-top:14px">
+<a href="/" class="btn" style="background:#2b6cb0;margin-right:8px;text-decoration:none;">Back Home</a>
+<a href="/summary" class="btn" style="text-decoration:none;">Go to Summary</a>
+</div>
+</div>
+</div>
+<script>
+const askBtn = document.getElementById('ask-btn');
+const questionInput = document.getElementById('question');
+const qaStatus = document.getElementById('qa-status');
+const answerBox = document.getElementById('answer-box');
+const answerText = document.getElementById('answer-text');
+const chunksList = document.getElementById('chunks-list');
+
+function showStatus(el,msg,type){ el.innerHTML = `<div class="status ${type}">${msg}</div>` }
+
+askBtn.addEventListener('click', async ()=>{
+    const question = questionInput.value.trim();
+    if(!question){ showStatus(qaStatus,'Please enter a question','error'); return }
+    const index_file = localStorage.getItem('currentIndexFile');
+    const chunks_file = localStorage.getItem('currentChunksFile');
+    if(!index_file || !chunks_file){ showStatus(qaStatus,'Please process the text first','error'); return }
+    askBtn.disabled=true; askBtn.textContent='Thinking...';
+    try{
+        showStatus(qaStatus,'Searching...','info');
+        const res = await fetch('/api/ask-question',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question, index_file, chunks_file})});
+        const data = await res.json();
+        if(!data.success) throw new Error(data.error||'ask failed');
+        answerText.textContent = data.answer;
+        chunksList.innerHTML = '';
+        data.relevant_chunks.forEach((c,i)=>{
+            const d = document.createElement('div'); d.className='chunk-item'; d.textContent = c; chunksList.appendChild(d);
+        });
+        answerBox.style.display='block'; showStatus(qaStatus,'Answered','success');
+    }catch(err){ showStatus(qaStatus,`Error: ${err.message}`,'error') }
+    finally{ askBtn.disabled=false; askBtn.textContent='Ask' }
+});
+</script>
+</body>
+</html>

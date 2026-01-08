@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Summary</title>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+<style>
+body{font-family:Segoe UI,Arial;background:#f6f8fb;color:#333}
+.container{max-width:900px;margin:30px auto;padding:20px}
+.card{background:#fff;border-radius:12px;padding:24px}
+.form-control{width:100%;padding:10px;margin-bottom:12px;border-radius:8px;border:1px solid #e1e5e9}
+.btn{background:#f5576c;color:#fff;padding:10px 16px;border-radius:8px;border:none;cursor:pointer}
+.status{margin-top:12px;padding:10px;border-radius:8px}
+.output-text{background:#f8f9fa;padding:12px;border-radius:8px;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<div class="container">
+<div class="card">
+<h2><i class="fas fa-file-alt"></i> Generate Summary</h2>
+<p>Summary will be generated from the most recent transcribed text.</p>
+<button id="summarize-btn" class="btn">Generate Summary</button>
+<div id="summary-status"></div>
+<div id="summary-output" style="display:none;margin-top:12px">
+<h4>Summary</h4>
+<div class="output-text" id="summary-text"></div>
+</div>
+<div style="margin-top:14px">
+<a href="/" class="btn" style="background:#2b6cb0;margin-right:8px;text-decoration:none;">Back Home</a>
+<a href="/qa" class="btn" style="text-decoration:none;">Go to Q&A</a>
+</div>
+</div>
+</div>
+<script>
+const summarizeBtn = document.getElementById('summarize-btn');
+const summaryStatus = document.getElementById('summary-status');
+const summaryOutput = document.getElementById('summary-output');
+const summaryText = document.getElementById('summary-text');
+
+function showStatus(el,msg,type){ el.innerHTML = `<div class="status ${type}">${msg}</div>` }
+
+summarizeBtn.addEventListener('click', async ()=>{
+    const text_file = localStorage.getItem('currentTextFile');
+    if(!text_file){ showStatus(summaryStatus,'No text file available','error'); return }
+    summarizeBtn.disabled=true; summarizeBtn.textContent='Summarizing...';
+    try{
+        showStatus(summaryStatus,'Generating summary...','info');
+        const res = await fetch('/api/summarize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text_file})});
+        const data = await res.json();
+        if(!data.success) throw new Error(data.error||'summary failed');
+        summaryText.textContent = data.summary;
+        summaryOutput.style.display='block'; showStatus(summaryStatus,'Summary generated','success');
+    }catch(err){ showStatus(summaryStatus,`Error: ${err.message}`,'error') }
+    finally{ summarizeBtn.disabled=false; summarizeBtn.textContent='Generate Summary' }
+});
+</script>
+</body>
+</html>

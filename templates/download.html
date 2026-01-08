@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Download & Transcribe</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root{
+            --primary: #2b6cb0;
+            --accent: #38b2ac;
+            --accent-2: #805ad5;
+            --bg1: #f6f8fb;
+            --card-bg: #ffffff;
+            --muted: #6b7280;
+        }
+
+        *{box-sizing:border-box;margin:0;padding:0}
+        body{font-family:Segoe UI,Roboto,Arial,Helvetica,sans-serif;background:var(--bg1);color:#0f172a}
+        .container{max-width:900px;margin:24px auto;padding:18px}
+        .topbar{display:flex;justify-content:space-between;align-items:center;padding:12px 0}
+        .brand{display:flex;gap:12px;align-items:center}
+        .logo{width:44px;height:44px;border-radius:10px;background:var(--primary);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;box-shadow:0 8px 20px rgba(43,108,176,0.12)}
+        .card{background:var(--card-bg);border-radius:12px;padding:22px;box-shadow:0 10px 26px rgba(15,23,42,0.05)}
+        .form-control{width:100%;padding:10px;margin-bottom:12px;border-radius:8px;border:1px solid #e6eef2;font-size:15px}
+        .btn{background:var(--primary);color:#fff;padding:10px 16px;border-radius:8px;border:none;cursor:pointer;font-weight:600}
+        .btn.secondary{background:#ed64a6}
+        .loading{display:inline-block;width:16px;height:16px;border:3px solid #f3f3f3;border-top:3px solid var(--primary);border-radius:50%;animation:spin 1s linear infinite}
+        @keyframes spin{0%{transform:rotate(0)}100%{transform:rotate(360deg)}}
+        .status{margin-top:12px;padding:10px;border-radius:8px;font-weight:600}
+        .status.info{background:#d1ecf1;color:#0c5460}
+        .status.success{background:#d4edda;color:#155724}
+        .status.error{background:#f8d7da;color:#721c24}
+        a.btn{display:inline-flex;align-items:center;gap:8px;text-decoration:none}
+        @media(max-width:640px){.container{padding:12px}.card{padding:16px}.logo{width:38px;height:38px}}
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="topbar">
+            <div class="brand">
+                <div class="logo">A</div>
+                <div>
+                    <div style="font-weight:700;color:var(--primary)">Audio Transciber</div>
+                    <div style="font-size:12px;color:var(--muted)">Download & Transcribe</div>
+                </div>
+            </div>
+            <nav style="display:flex;gap:12px;align-items:center">
+                <a class="btn" href="/">Home</a>
+                <a class="btn secondary" href="/process">Process</a>
+            </nav>
+        </div>
+
+        <div class="card">
+            <h2 style="margin-bottom:12px"><i class="fas fa-download"></i> Download & Transcribe</h2>
+            <label for="youtube-url">YouTube URL:</label>
+            <input id="youtube-url" class="form-control" placeholder="https://youtu.be/...">
+
+            <label for="task-type">Processing Type:</label>
+            <select id="task-type" class="form-control">
+                <option value="translate">Translate to English</option>
+                <option value="transcribe">Transcribe (Original Language)</option>
+            </select>
+
+            <button id="download-btn" class="btn"><i class="fas fa-download"></i> Download & Process</button>
+
+            <div id="download-status"></div>
+            <div id="transcription-output" style="display:none;margin-top:12px">
+                <h4>Transcription</h4>
+                <pre id="transcription-text" style="background:#f8f9fa;padding:12px;border-radius:8px;white-space:pre-wrap;"></pre>
+            </div>
+
+            <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+                <a href="/process" class="btn secondary">Go to Process</a>
+            </div>
+        </div>
+    </div>
+
+<script>
+const downloadBtn = document.getElementById('download-btn');
+const youtubeUrl = document.getElementById('youtube-url');
+const taskType = document.getElementById('task-type');
+const downloadStatus = document.getElementById('download-status');
+const transcriptionOutput = document.getElementById('transcription-output');
+const transcriptionText = document.getElementById('transcription-text');
+
+function showStatus(element, message, type){ element.innerHTML = `<div class="status ${type}">${message}</div>` }
+
+downloadBtn.addEventListener('click', async () => {
+    const url = youtubeUrl.value.trim();
+    if(!url){ showStatus(downloadStatus,'Please enter a YouTube URL','error'); return }
+    downloadBtn.disabled = true; downloadBtn.innerHTML = '<span class="loading"></span> Downloading...';
+    try{
+        showStatus(downloadStatus,'Downloading audio...','info');
+        const dl = await fetch('/api/download-audio', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url})});
+        const dlData = await dl.json();
+        if(!dlData.success) throw new Error(dlData.error||'download failed');
+        showStatus(downloadStatus,`Audio downloaded: ${dlData.video_title}`,'success');
+
+        showStatus(downloadStatus,'Transcribing audio...','info');
+        const tr = await fetch('/api/transcribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({audio_file:dlData.audio_file, task: taskType.value})});
+        const trData = await tr.json();
+        if(!trData.success) throw new Error(trData.error||'transcription failed');
+
+        // persist state across pages
+        localStorage.setItem('currentAudioFile', dlData.audio_file);
+        localStorage.setItem('currentTextFile', trData.output_file);
+        localStorage.setItem('transcribed_text', trData.transcribed_text);
+
+        transcriptionText.textContent = trData.transcribed_text;
+        transcriptionOutput.style.display = 'block';
+        showStatus(downloadStatus,'Transcription completed','success');
+    }catch(err){ showStatus(downloadStatus,`Error: ${err.message}`,'error') }
+    finally{ downloadBtn.disabled=false; downloadBtn.innerHTML = '<i class="fas fa-download"></i> Download & Process' }
+});
+</script>
+</body>
+</html>
