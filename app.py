@@ -134,7 +134,7 @@ def initialize_models():
     embedding_model = SentenceTransformer('all-mpnet-base-v2')
     
     print("Initializing Gemini model...")
-    os.environ["GOOGLE_API_KEY"] = "AIzaSyBERCzNPaxYt26gffWEWRdqrQZZNEnb8DU"
+    os.environ["GOOGLE_API_KEY"] = ""
     llm = GoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.2)
     
     print("All models loaded successfully!")
