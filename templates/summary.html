@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Summary — Audio Transcriber{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="fas fa-file-lines"></i> Generate Summary</h1>
+    <p>Get a concise overview of your transcription using AI.</p>
+</div>
+
+<div class="card">
+    <p style="color:var(--text-muted);margin-bottom:20px">Summary is generated from your most recent transcription.</p>
+
+    <button id="summarize-btn" class="btn btn-primary"><i class="fas fa-wand-magic-sparkles"></i> Generate Summary</button>
+
+    <div id="summary-status"></div>
+
+    <div id="summary-output" style="display:none;margin-top:20px">
+        <label style="margin-bottom:8px;display:block">Summary</label>
+        <div id="summary-text" class="output-box" style="line-height:1.8"></div>
+    </div>
+
+    <div style="margin-top:20px;display:flex;gap:12px;flex-wrap:wrap">
+        <a href="/" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
+        <a href="/qa" class="btn btn-primary"><i class="fas fa-comments"></i> Q&A</a>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const summarizeBtn = document.getElementById('summarize-btn');
+const summaryStatus = document.getElementById('summary-status');
+const summaryOutput = document.getElementById('summary-output');
+const summaryText = document.getElementById('summary-text');
+
+function showStatus(el, msg, type){ el.innerHTML = `<div class="status ${type}">${msg}</div>` }
+
+summarizeBtn.addEventListener('click', async () => {
+    const text_file = localStorage.getItem('currentTextFile');
+    if(!text_file){ showStatus(summaryStatus, '<i class="fas fa-exclamation-circle"></i> No transcription available. Transcribe audio first.', 'error'); return }
+    summarizeBtn.disabled = true;
+    summarizeBtn.innerHTML = '<span class="loading"></span> Summarizing...';
+    try {
+        showStatus(summaryStatus, '<i class="fas fa-wand-magic-sparkles"></i> Generating...', 'info');
+        const res = await fetch('/api/summarize', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({text_file})});
+        const data = await res.json();
+        if(!data.success) throw new Error(data.error || 'Failed');
+        summaryText.textContent = data.summary;
+        summaryOutput.style.display = 'block';
+        showStatus(summaryStatus, '<i class="fas fa-check-circle"></i> Summary generated', 'success');
+    } catch(err) {
+        showStatus(summaryStatus, `<i class="fas fa-exclamation-circle"></i> ${err.message}`, 'error');
+    } finally {
+        summarizeBtn.disabled = false;
+        summarizeBtn.innerHTML = '<i class="fas fa-wand-magic-sparkles"></i> Generate Summary';
+    }
+});
+</script>
+{% endblock %}

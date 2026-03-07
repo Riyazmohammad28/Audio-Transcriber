@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Process for Q&A — Audio Transcriber{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="fas fa-cogs"></i> Process for Q&A</h1>
+    <p>Prepare your transcription for semantic search. This creates embeddings so you can ask questions.</p>
+</div>
+
+<div class="card">
+    <div class="form-group">
+        <label for="text-file">Transcribed Text File</label>
+        <input id="text-file" class="form-control" placeholder="e.g. transcribed_audio_xxx.txt (auto-filled from last transcription)">
+    </div>
+
+    <button id="process-btn" class="btn btn-primary"><i class="fas fa-bolt"></i> Process</button>
+
+    <div id="process-status"></div>
+
+    <div id="transcription-output" style="display:none;margin-top:20px">
+        <label style="margin-bottom:8px;display:block">Preview</label>
+        <div id="transcription-text" class="output-box" style="max-height:200px;overflow-y:auto"></div>
+    </div>
+
+    <div style="margin-top:20px;display:flex;gap:12px;flex-wrap:wrap">
+        <a href="/" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
+        <a href="/qa" class="btn btn-primary"><i class="fas fa-comments"></i> Ask Questions</a>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const processBtn = document.getElementById('process-btn');
+const textFileInput = document.getElementById('text-file');
+const processStatus = document.getElementById('process-status');
+const transcriptionOutput = document.getElementById('transcription-output');
+const transcriptionText = document.getElementById('transcription-text');
+
+function showStatus(el, msg, type){ el.innerHTML = `<div class="status ${type}">${msg}</div>` }
+
+const savedTextFile = localStorage.getItem('currentTextFile');
+const savedTranscription = localStorage.getItem('transcribed_text');
+if(savedTextFile) textFileInput.value = savedTextFile;
+if(savedTranscription){ transcriptionText.textContent = savedTranscription; transcriptionOutput.style.display = 'block'; }
+
+processBtn.addEventListener('click', async () => {
+    const text_file = textFileInput.value || localStorage.getItem('currentTextFile');
+    if(!text_file){ showStatus(processStatus, '<i class="fas fa-exclamation-circle"></i> No text file specified', 'error'); return }
+    processBtn.disabled = true;
+    processBtn.innerHTML = '<span class="loading"></span> Processing...';
+    try {
+        showStatus(processStatus, '<i class="fas fa-cog fa-spin"></i> Creating embeddings...', 'info');
+        const res = await fetch('/api/process-text', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({text_file})});
+        const data = await res.json();
+        if(!data.success) throw new Error(data.error || 'Processing failed');
+        localStorage.setItem('currentIndexFile', data.index_file);
+        localStorage.setItem('currentChunksFile', data.chunks_file);
+        showStatus(processStatus, `<i class="fas fa-check-circle"></i> Done — ${data.num_chunks} chunks created`, 'success');
+    } catch(err) {
+        showStatus(processStatus, `<i class="fas fa-exclamation-circle"></i> ${err.message}`, 'error');
+    } finally {
+        processBtn.disabled = false;
+        processBtn.innerHTML = '<i class="fas fa-bolt"></i> Process';
+    }
+});
+</script>
+{% endblock %}

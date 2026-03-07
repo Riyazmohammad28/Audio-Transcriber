@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% block title %}Transcribe Audio — Audio Transcriber{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="fas fa-microphone-alt"></i> Transcribe Audio</h1>
+    <p>Convert speech to text from YouTube or upload your own audio file. Supports 10+ languages including Telugu, Hindi & English.</p>
+    <div style="display:flex;gap:20px;margin-top:16px;flex-wrap:wrap;font-size:0.85rem;color:var(--text-muted)">
+        <span><i class="fas fa-globe" style="color:var(--accent)"></i> 10+ languages</span>
+        <span><i class="fas fa-youtube" style="color:var(--accent)"></i> YouTube & upload</span>
+        <span><i class="fas fa-bolt" style="color:var(--accent)"></i> AI Q&A & summary</span>
+    </div>
+</div>
+
+<div class="card">
+    <div class="form-group">
+        <label>Source</label>
+        <div class="radio-group">
+            <label class="radio-option">
+                <input type="radio" name="source" value="youtube" checked>
+                <span><i class="fas fa-youtube"></i> YouTube URL</span>
+            </label>
+            <label class="radio-option">
+                <input type="radio" name="source" value="upload">
+                <span><i class="fas fa-upload"></i> Upload File</span>
+            </label>
+        </div>
+    </div>
+
+    <div id="youtube-section" class="form-group">
+        <label for="youtube-url">YouTube URL</label>
+        <input id="youtube-url" class="form-control" placeholder="https://youtube.com/watch?v=... or https://youtu.be/...">
+    </div>
+    <div id="upload-section" class="form-group" style="display:none">
+        <label>Audio File</label>
+        <div class="file-upload-zone" id="file-zone" onclick="document.getElementById('audio-file').click()">
+            <input type="file" id="audio-file" accept=".mp3,.wav,.m4a,.webm,.ogg,.flac,.aac,.wma,.mp4">
+            <p id="file-zone-text" style="margin:0;color:var(--text-muted)"><i class="fas fa-cloud-upload-alt" style="font-size:24px;margin-bottom:8px;display:block;color:var(--accent)"></i>
+            Click to browse or drag & drop</p>
+            <p id="file-zone-hint" style="font-size:12px;color:var(--text-muted);margin-top:4px">MP3, WAV, M4A, WEBM, OGG, FLAC</p>
+        </div>
+    </div>
+
+    <div class="form-group">
+        <label for="task-type">Processing</label>
+        <select id="task-type" class="form-control">
+            <option value="translate">Translate to English</option>
+            <option value="transcribe">Keep Original Language</option>
+        </select>
+    </div>
+
+    <div id="language-row" class="form-group" style="display:none">
+        <label for="source-language">Source Language <small style="color:var(--text-muted)">(improves Telugu/Hindi accuracy)</small></label>
+        <select id="source-language" class="form-control">
+            <option value="">Auto-detect</option>
+            <option value="te">Telugu</option>
+            <option value="hi">Hindi</option>
+            <option value="ta">Tamil</option>
+            <option value="kn">Kannada</option>
+            <option value="ml">Malayalam</option>
+            <option value="en">English</option>
+            <option value="mr">Marathi</option>
+            <option value="bn">Bengali</option>
+        </select>
+    </div>
+
+    <button id="download-btn" class="btn btn-primary"><i class="fas fa-play"></i> Transcribe</button>
+
+    <div id="download-status"></div>
+
+    <div id="transcription-output" style="display:none;margin-top:20px">
+        <label style="margin-bottom:8px;display:block">Transcription</label>
+        <div id="transcription-text" class="output-box"></div>
+    </div>
+
+    <div style="margin-top:20px;display:flex;gap:12px;flex-wrap:wrap">
+        <a href="/process" class="btn btn-secondary"><i class="fas fa-arrow-right"></i> Process for Q&A</a>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const downloadBtn = document.getElementById('download-btn');
+const youtubeUrl = document.getElementById('youtube-url');
+const audioFileInput = document.getElementById('audio-file');
+const youtubeSection = document.getElementById('youtube-section');
+const uploadSection = document.getElementById('upload-section');
+const taskType = document.getElementById('task-type');
+const languageRow = document.getElementById('language-row');
+const sourceLanguage = document.getElementById('source-language');
+const downloadStatus = document.getElementById('download-status');
+const transcriptionOutput = document.getElementById('transcription-output');
+const transcriptionText = document.getElementById('transcription-text');
+
+document.querySelectorAll('input[name="source"]').forEach(r => {
+    r.addEventListener('change', () => {
+        const isYoutube = r.value === 'youtube';
+        youtubeSection.style.display = isYoutube ? 'block' : 'none';
+        uploadSection.style.display = isYoutube ? 'none' : 'block';
+        if(!isYoutube) youtubeUrl.value = '';
+        else audioFileInput.value = '';
+    });
+});
+
+taskType.addEventListener('change', () => {
+    languageRow.style.display = taskType.value === 'transcribe' ? 'block' : 'none';
+});
+languageRow.style.display = taskType.value === 'transcribe' ? 'block' : 'none';
+
+audioFileInput.addEventListener('change', () => {
+    const f = audioFileInput.files?.[0];
+    const zoneText = document.getElementById('file-zone-text');
+    const zoneHint = document.getElementById('file-zone-hint');
+    if (f) {
+        zoneText.innerHTML = `<i class="fas fa-file-audio" style="font-size:24px;margin-bottom:8px;display:block;color:var(--accent)"></i> ${f.name}`;
+        zoneHint.textContent = (f.size / 1024).toFixed(1) + ' KB';
+    } else {
+        zoneText.innerHTML = '<i class="fas fa-cloud-upload-alt" style="font-size:24px;margin-bottom:8px;display:block;color:var(--accent)"></i> Click to browse or drag & drop';
+        zoneHint.textContent = 'MP3, WAV, M4A, WEBM, OGG, FLAC';
+    }
+});
+
+function showStatus(el, msg, type){ el.innerHTML = `<div class="status ${type}">${msg}</div>` }
+
+async function getAudioFromSource() {
+    const isYoutube = document.querySelector('input[name="source"]:checked').value === 'youtube';
+    if (isYoutube) {
+        const url = youtubeUrl.value.trim();
+        if (!url) throw new Error('Please enter a YouTube URL');
+        showStatus(downloadStatus, '<i class="fas fa-download"></i> Downloading audio...', 'info');
+        const res = await fetch('/api/download-audio', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url})});
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Download failed');
+        showStatus(downloadStatus, `<i class="fas fa-check"></i> Downloaded: ${data.video_title}`, 'success');
+        return data.audio_file;
+    } else {
+        if (!audioFileInput.files || !audioFileInput.files[0]) throw new Error('Please select an audio file');
+        showStatus(downloadStatus, '<i class="fas fa-upload"></i> Uploading...', 'info');
+        const form = new FormData();
+        form.append('audio', audioFileInput.files[0]);
+        const res = await fetch('/api/upload-audio', {method:'POST', body: form});
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Upload failed');
+        showStatus(downloadStatus, `<i class="fas fa-check"></i> Uploaded: ${data.file_name}`, 'success');
+        return data.audio_file;
+    }
+}
+
+downloadBtn.addEventListener('click', async () => {
+    downloadBtn.disabled = true;
+    downloadBtn.innerHTML = '<span class="loading"></span> Processing...';
+    try {
+        const audioFile = await getAudioFromSource();
+        showStatus(downloadStatus, '<i class="fas fa-language"></i> Transcribing... (this may take a few minutes for long audio)', 'info');
+
+        const body = { audio_file: audioFile, task: taskType.value };
+        if (taskType.value === 'transcribe' && sourceLanguage.value) body.language = sourceLanguage.value;
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15 * 60 * 1000);
+        let trData;
+        try {
+            const tr = await fetch('/api/transcribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+                signal: controller.signal
+            });
+            trData = await tr.json().catch(() => ({}));
+            if (!tr.ok) throw new Error(trData.error || tr.statusText || 'Transcription failed');
+        } catch (fetchErr) {
+            clearTimeout(timeoutId);
+            if (fetchErr.name === 'AbortError') throw new Error('Request timed out (15 min). Try a shorter clip or try again.');
+            throw fetchErr;
+        }
+        clearTimeout(timeoutId);
+
+        if (!trData.success) throw new Error(trData.error || 'Transcription failed');
+
+        localStorage.setItem('currentAudioFile', audioFile);
+        localStorage.setItem('currentTextFile', trData.output_file);
+        localStorage.setItem('transcribed_text', trData.transcribed_text);
+
+        transcriptionText.textContent = trData.transcribed_text;
+        transcriptionOutput.style.display = 'block';
+        showStatus(downloadStatus, '<i class="fas fa-check-circle"></i> Transcription complete', 'success');
+    } catch(err) {
+        showStatus(downloadStatus, `<i class="fas fa-exclamation-circle"></i> ${err.message}`, 'error');
+    } finally {
+        downloadBtn.disabled = false;
+        downloadBtn.innerHTML = '<i class="fas fa-play"></i> Transcribe';
+    }
+});
+</script>
+{% endblock %}

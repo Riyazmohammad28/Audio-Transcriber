@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Q&A — Audio Transcriber{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="fas fa-comments"></i> Ask Questions</h1>
+    <p>Get answers from your transcription using AI. Process your text first if you haven't yet.</p>
+</div>
+
+<div class="card">
+    <div class="form-group">
+        <label for="question">Your question</label>
+        <div style="display:flex;gap:12px">
+            <input id="question" class="form-control" placeholder="e.g. What are the main points discussed?">
+            <button id="ask-btn" class="btn btn-primary" style="flex-shrink:0"><i class="fas fa-search"></i> Ask</button>
+        </div>
+    </div>
+
+    <div id="qa-status"></div>
+
+    <div id="answer-box" style="display:none;margin-top:20px">
+        <div style="background:linear-gradient(135deg, var(--accent-soft) 0%, rgba(6,182,212,0.05) 100%);border-radius:12px;padding:20px;border-left:4px solid var(--accent)">
+            <label style="font-weight:600;margin-bottom:8px;display:block">Answer</label>
+            <div id="answer-text" style="line-height:1.7"></div>
+        </div>
+        <div style="margin-top:16px">
+            <label style="font-weight:600;margin-bottom:8px;display:block">Relevant context</label>
+            <div id="chunks-list"></div>
+        </div>
+    </div>
+
+    <div style="margin-top:20px;display:flex;gap:12px;flex-wrap:wrap">
+        <a href="/" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
+        <a href="/summary" class="btn btn-primary"><i class="fas fa-file-lines"></i> Summary</a>
+    </div>
+</div>
+
+<style>
+.chunk-item {
+    background: #f8fafc;
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    border-left: 3px solid var(--accent);
+    font-size: 0.9rem;
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const askBtn = document.getElementById('ask-btn');
+const questionInput = document.getElementById('question');
+const qaStatus = document.getElementById('qa-status');
+const answerBox = document.getElementById('answer-box');
+const answerText = document.getElementById('answer-text');
+const chunksList = document.getElementById('chunks-list');
+
+function showStatus(el, msg, type){ el.innerHTML = `<div class="status ${type}">${msg}</div>` }
+
+askBtn.addEventListener('click', async () => {
+    const question = questionInput.value.trim();
+    if(!question){ showStatus(qaStatus, '<i class="fas fa-exclamation-circle"></i> Please enter a question', 'error'); return }
+    const index_file = localStorage.getItem('currentIndexFile');
+    const chunks_file = localStorage.getItem('currentChunksFile');
+    if(!index_file || !chunks_file){ showStatus(qaStatus, '<i class="fas fa-exclamation-circle"></i> Process the text first (Process page)', 'error'); return }
+    askBtn.disabled = true;
+    askBtn.innerHTML = '<span class="loading"></span> Thinking...';
+    try {
+        showStatus(qaStatus, '<i class="fas fa-brain"></i> Searching & answering...', 'info');
+        const res = await fetch('/api/ask-question', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({question, index_file, chunks_file})});
+        const data = await res.json();
+        if(!data.success) throw new Error(data.error || 'Failed');
+        answerText.textContent = data.answer;
+        chunksList.innerHTML = '';
+        data.relevant_chunks.forEach(c => {
+            const d = document.createElement('div');
+            d.className = 'chunk-item';
+            d.textContent = c;
+            chunksList.appendChild(d);
+        });
+        answerBox.style.display = 'block';
+        showStatus(qaStatus, '<i class="fas fa-check-circle"></i> Answered', 'success');
+    } catch(err) {
+        showStatus(qaStatus, `<i class="fas fa-exclamation-circle"></i> ${err.message}`, 'error');
+    } finally {
+        askBtn.disabled = false;
+        askBtn.innerHTML = '<i class="fas fa-search"></i> Ask';
+    }
+});
+</script>
+{% endblock %}
